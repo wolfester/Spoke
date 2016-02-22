@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.24720.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Spoke.Demo", "Spoke.Demo\Spoke.Demo.csproj", "{710D298F-9C62-443B-9E59-B47E062C1D60}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Spoke.Tests", "Spoke.Tests\Spoke.Tests.csproj", "{A826743A-DC02-44E1-A775-7BC91157D0E6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Spoke", "Spoke\Spoke.csproj", "{2E41EED0-727F-44AF-860C-9EE1D38A7193}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{710D298F-9C62-443B-9E59-B47E062C1D60}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{710D298F-9C62-443B-9E59-B47E062C1D60}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{710D298F-9C62-443B-9E59-B47E062C1D60}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{710D298F-9C62-443B-9E59-B47E062C1D60}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A826743A-DC02-44E1-A775-7BC91157D0E6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A826743A-DC02-44E1-A775-7BC91157D0E6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A826743A-DC02-44E1-A775-7BC91157D0E6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A826743A-DC02-44E1-A775-7BC91157D0E6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2E41EED0-727F-44AF-860C-9EE1D38A7193}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2E41EED0-727F-44AF-860C-9EE1D38A7193}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2E41EED0-727F-44AF-860C-9EE1D38A7193}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2E41EED0-727F-44AF-860C-9EE1D38A7193}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
