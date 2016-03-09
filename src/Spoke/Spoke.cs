@@ -1180,6 +1180,14 @@ namespace Spoke
                             @event.Topics,
                             subscription.RequestType );
 
+                        var liveRetryAbortAfterMinutes = subscription.AbortAfterMinutes ??
+                                                         Configuration.DefaultAbortAfterMinutes ?? 0;
+
+                        if ( liveRetryAbortAfterMinutes > (Configuration.LiveRetryAbortAfterMinutes ?? 0) )
+                        {
+                            liveRetryAbortAfterMinutes = Configuration.LiveRetryAbortAfterMinutes ?? 0;
+                        }
+
                         notifications.Add(
                             new Models.SubscriptionNotification
                             {
@@ -1193,8 +1201,7 @@ namespace Spoke
                                 Uri = uri,
                                 Payload = transformOutput,
                                 LiveRetryExpirationTime =
-                                    @event.CreateDate.AddMinutes(
-                                        Configuration.LiveRetryAbortAfterMinutes.ToInt() )
+                                    @event.CreateDate.AddMinutes( liveRetryAbortAfterMinutes.ToInt() )
                             } );
                     }
                     catch ( Exception ex )
@@ -2575,7 +2582,7 @@ WHERE
                         DbType.DateTime )
                     .AddParameter( "@startDate", DateTime.Now.AddMinutes( -1 * lookbackMinutes ?? Configuration.LiveRetryAbortAfterMinutes ?? 0 ),
                         DbType.DateTime )
-                    .AddParameter( "@abortMinutes", Configuration.LiveRetryAbortAfterMinutes ?? 0, DbType.Int32 );
+                    .AddParameter( "@abortMinutes", Configuration.DefaultAbortAfterMinutes ?? 0, DbType.Int32 );
 
                     var dbResult = cmd.ExecuteToDynamicList();
 
