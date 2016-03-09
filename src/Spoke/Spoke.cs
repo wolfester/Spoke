@@ -1,5 +1,5 @@
 ﻿/*
-    Spoke v0.09.1
+    Spoke v0.09.0
     
     Spoke is a webhooks library designed to be implemented in your current service application.
     
@@ -675,9 +675,6 @@ namespace Spoke
                 },
                     eventId,
                     null,
-                    subscription == null
-                        ? Configuration.DefaultAbortAfterMinutes
-                        : subscription.AbortAfterMinutes ?? Configuration.DefaultAbortAfterMinutes,
                     mutexKey,
                     true );
 
@@ -970,7 +967,6 @@ namespace Spoke
             /// <param name="method">The function being called.</param>
             /// <param name="eventId">The id of the event.</param>
             /// <param name="eventSubscriptionId">The id of the event subscription.</param>
-            /// <param name="abortAfterMinutes">The number of minutes to retry before giving up.</param>
             /// <param name="mutexKey">The mutex key to acquire a mutex.</param>
             /// <param name="retry">Whether or not to retry.</param>
             /// <returns><see cref="Models.ExceptionWrapperResult{T}"/></returns>
@@ -978,11 +974,10 @@ namespace Spoke
                Func<T> method,
                object eventId,
                object eventSubscriptionId,
-               int abortAfterMinutes,
                string mutexKey,
                bool retry )
             {
-                var timeoutMinutes = abortAfterMinutes;
+                var timeoutMinutes = Configuration.DefaultAbortAfterMinutes.ToInt();
 
                 var startTime = DateTime.Now;
                 var timeout = TimeSpan.FromMinutes( timeoutMinutes );
@@ -990,7 +985,7 @@ namespace Spoke
 
                 var exceptions = new List<Exception>();
 
-                do
+                while ( startTime + timeout > DateTime.Now )
                 {
                     try
                     {
@@ -1023,7 +1018,6 @@ namespace Spoke
                         currentWaitTime = currentWaitTime + currentWaitTime;
                     }
                 }
-                while  ( startTime + timeout > DateTime.Now );
 
                 return new Models.ExceptionWrapperResult<T>
                 {
@@ -1129,8 +1123,6 @@ namespace Spoke
                     },
                         notification.EventSubscription.Event.EventId,
                         notification.EventSubscription.EventSubscriptionId,
-                        notification.EventSubscription.Subscription.AbortAfterMinutes
-                        ?? Configuration.DefaultAbortAfterMinutes,
                         mutexKey,
                         true );
                 } );
@@ -3351,7 +3343,7 @@ IF @result IN ( 0, 1 )
         /// </summary>
         public class SpokeConfiguration
         {
-            public int DefaultAbortAfterMinutes = 60;
+            public int? DefaultAbortAfterMinutes = 60;
             public int? LiveRetryAbortAfterMinutes = 60;
             public int? EventProcessingMutexTimeToLiveMinutes = 2;
             public int? EventSubscriptionMutexTimeToLiveMinutes = 2;
