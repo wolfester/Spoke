@@ -1208,7 +1208,7 @@ namespace Spoke
                     {
                         LogEventSubscriptionActivity(
                             @event.EventId,
-                            null,
+                            subscription.SubscriptionId,
                             Utils.EventSubscriptionActivityTypeCode.SubscriptionTransformFunctionInvalid,
                             ex );
                     }
