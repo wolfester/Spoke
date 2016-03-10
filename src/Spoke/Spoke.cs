@@ -1211,8 +1211,6 @@ namespace Spoke
                             null,
                             Utils.EventSubscriptionActivityTypeCode.SubscriptionTransformFunctionInvalid,
                             ex );
-
-                        throw;
                     }
                 }
 
