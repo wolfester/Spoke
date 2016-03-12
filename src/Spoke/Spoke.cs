@@ -490,12 +490,7 @@ namespace Spoke
                int? lookbackUpToMinutes
                )
             {
-                var configuration = Configuration;
-
-                if ( lookbackMinutes.HasValue ) configuration.FailedEventsLookbackMinutes = lookbackMinutes;
-                if ( lookbackUpToMinutes.HasValue ) configuration.FailedEventsThresholdMinutes = lookbackUpToMinutes;
-
-                var events = Configuration.Database().GetFailedEvents();
+                var events = Configuration.Database().GetFailedEvents( lookbackMinutes, lookbackUpToMinutes );
 
                 return new Models.EventsResponse
                 {
@@ -2110,7 +2105,7 @@ function processTransform(eventData, topicData) {{
                 /// Method to get failed events.
                 /// </summary>
                 /// <returns>List of <see cref="Models.Event"/></returns>
-                List<Models.Event> GetFailedEvents();
+                List<Models.Event> GetFailedEvents( int? lookbackMinutes = null, int? lookbackUpToMinutes = null );
 
                 /// <summary>
                 /// Method to get failed events subscription.
@@ -2488,7 +2483,7 @@ ORDER BY
                 /// Method to get failed events.
                 /// </summary>
                 /// <returns>List of <see cref="Models.Event"/></returns>
-                public List<Models.Event> GetFailedEvents()
+                public List<Models.Event> GetFailedEvents( int? lookbackMinutes = null, int? lookbackUpToMinutes = null )
                 {
                     var cmd = GetDbCommand().SetCommandText( @"
 SELECT DISTINCT
@@ -2515,8 +2510,8 @@ WHERE
     AND E.CreateDate <= @endDate
 " );
 
-                    cmd.AddParameter( "@startDate", DateTime.Now.AddMinutes( -1 * Configuration.FailedEventsLookbackMinutes ?? 0 ), DbType.DateTime )
-                       .AddParameter( "@endDate", DateTime.Now.AddMinutes( -1 * Configuration.FailedEventsThresholdMinutes ?? 0 ), DbType.DateTime );
+                    cmd.AddParameter( "@startDate", DateTime.Now.AddMinutes( -1 * ( lookbackMinutes ?? Configuration.FailedEventsLookbackMinutes ?? 0 ) ), DbType.DateTime )
+                       .AddParameter( "@endDate", DateTime.Now.AddMinutes( -1 * ( lookbackUpToMinutes ?? Configuration.FailedEventsThresholdMinutes ?? 0 ) ), DbType.DateTime );
 
                     var eventIds = cmd.ExecuteToList<long>();
 
