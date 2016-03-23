@@ -450,6 +450,31 @@ namespace Spoke
                 string topicKey
                 )
             {
+                var events = Configuration.Database().GetEvents(
+                    count,
+                    eventName,
+                    topicKey)
+                    .ToList();
+
+                return new Models.EventsResponse
+                {
+                    Events = new List<Models.Event>(events)
+                };
+            }
+
+            /// <summary>
+            /// Get events by count, eventName, and/or topicKey
+            /// </summary>
+            /// <param name="count">The maximum number of events to search through</param>
+            /// <param name="eventName">The name of the events you are trying to retrieve</param>
+            /// <param name="topicKey">The name of the topic you are looking for</param>
+            /// <returns><see cref="Models.EventsResponse"/></returns>
+            public static Models.EventsResponse GetLatestEvents(
+                int? count,
+                string eventName,
+                string topicKey
+                )
+            {
                 var events = Configuration.Database().GetLatestEvents(
                     count,
                     eventName,
@@ -2073,6 +2098,15 @@ function processTransform(eventData, topicData) {{
                 /// <param name="eventName">The name of the events you are looking for.</param>
                 /// <param name="topicKey">The name of the topic you are looking for.</param>
                 /// <returns>List of <see cref="Models.Event"/></returns>
+                List<Models.Event> GetEvents(int? eventCount, string eventName, string topicKey);
+
+                /// <summary>
+                /// Method for returning some of the latest events.
+                /// </summary>
+                /// <param name="eventCount">The maximum number of events to search through</param>
+                /// <param name="eventName">The name of the events you are looking for.</param>
+                /// <param name="topicKey">The name of the topic you are looking for.</param>
+                /// <returns>List of <see cref="Models.Event"/></returns>
                 List<Models.Event> GetLatestEvents( int? eventCount, string eventName, string topicKey );
 
                 /// <summary>
@@ -2269,9 +2303,93 @@ WHERE
                 }
 
                 /// <summary>
-                /// Method for returning some of the latest events.
+                /// Method for returning the last N events.
                 /// </summary>
                 /// <param name="eventCount">The number of events to return</param>
+                /// <param name="eventName">The name of the events you are looking for.</param>
+                /// <param name="topicKey">The name of the topic you are looking for.</param>
+                /// <returns>List of <see cref="Models.Event"/></returns>
+                public List<Models.Event> GetEvents(int? eventCount, string eventName, string topicKey)
+                {
+                    var count = eventCount ?? 100;
+
+                    var cmd = GetDbCommand()
+                        .SetCommandText(@"
+SELECT 
+    E.EventId
+   ,E.EventData
+   ,E.TopicData
+   ,E.TopicCount
+   ,E.CreatedByHostName AS CreatedByHostName
+   ,E.CreatedByUser
+   ,E.CreatedByApplication
+   ,E.CreateDate
+   ,et.EventTopicId
+   ,et.[Key]
+   ,et.Value
+   ,et.CreatedByHostName AS TopicCreatedByHostName
+   ,et.CreatedByUser AS TopicCreatedByUser
+   ,et.CreatedByApplication AS TopicCreatedByApplication
+   ,et.CreateDate AS TopicCreateDate
+FROM
+    dbo.[Event] E
+    LEFT JOIN dbo.EventTopic et ON et.EventId = e.EventId
+    {0}
+ORDER BY
+    E.EventId DESC")
+                        //.AddParameter("@count", count, DbType.Int32)
+                        ;
+
+                    var joins = string.Empty;
+                    if (!string.IsNullOrEmpty(eventName))
+                    {
+                        joins += @"
+INNER JOIN dbo.EventTopic T1 ON T1.EventId = E.EventId
+                                AND T1.[Key] = 'EVENT_NAME'
+                                AND T1.Value = @eventName ";
+                        cmd.AddParameter("@eventName", eventName, DbType.AnsiString);
+                    }
+                    if (!string.IsNullOrEmpty(topicKey))
+                    {
+                        joins += @"
+INNER JOIN dbo.EventTopic T2 ON T2.EventId = E.EventId
+                                AND T2.[Key] = @topicKey";
+                        cmd.AddParameter("@topicKey", topicKey, DbType.AnsiString);
+                    }
+
+                    cmd.SetCommandText(string.Format(cmd.DbCommand.CommandText, joins));
+
+                    var dbResult = cmd.ExecuteToDynamicList();
+
+                    var distinctEvents = new Dictionary<long, List<dynamic>>();
+
+                    foreach (var @event in dbResult)
+                    {
+                        var eventId = Convert.ToInt64(@event.EventId);
+
+                        if (distinctEvents.ContainsKey(eventId))
+                            distinctEvents[eventId].Add(@event);
+                        else
+                            distinctEvents.Add(eventId, new List<dynamic> { @event });
+
+                        if (distinctEvents.Count >= count)
+                        {
+                            break;
+                        }
+                    }
+
+                    var events = new ConcurrentBag<Models.Event>();
+
+                    Parallel.ForEach(distinctEvents, new ParallelOptions { MaxDegreeOfParallelism = 8 },
+                        @event => events.Add(ToEvent(@event.Value)));
+
+                    return events.OrderByDescending(x => x.EventId).ToList();
+                }
+
+                /// <summary>
+                /// Method for returning some of the latest events.
+                /// </summary>
+                /// <param name="eventCount">The maximum number of events to search through.</param>
                 /// <param name="eventName">The name of the events you are looking for.</param>
                 /// <param name="topicKey">The name of the topic you are looking for.</param>
                 /// <returns>List of <see cref="Models.Event"/></returns>
