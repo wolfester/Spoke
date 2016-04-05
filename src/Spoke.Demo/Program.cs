@@ -101,7 +101,7 @@ namespace Spoke.Demo
                         },
                     JsonSerializer = new Spoke.Utils.JsonSerializer(),
                     Database = () => new Spoke.DatabaseIO.SpokeSqlDatabase(),
-                    DatabaseConnectionString = () => ConfigurationManager.ConnectionStrings[ "spoke" ].ConnectionString
+                    DatabaseConnectionString = () => ConfigurationManager.ConnectionStrings[ "spokePostgres" ].ConnectionString
                 };
 
                 //you can add support for "service types" by adding WasApiCallSuccessfulHandlers instead of the default.

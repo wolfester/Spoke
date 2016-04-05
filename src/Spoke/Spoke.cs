@@ -44,6 +44,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Numerics;
 using Jint;
 using Newtonsoft.Json;
 using SequelocityDotNet;
@@ -135,11 +136,11 @@ namespace Spoke
 
                 @event = Configuration.Database().SaveEvent( @event, false );
 
-                Task.Run( () =>
-                {
-                    InternalApi.SaveEventTopics( @event );
-                } )
-                .ContinueWith( x => InternalApi.ProcessEvent( @event.EventId, null ) );
+                //Task.Run( () =>
+                //{
+                //    InternalApi.SaveEventTopics( @event );
+                //} )
+                //.ContinueWith( x => InternalApi.ProcessEvent( @event.EventId, null ) );
 
                 return @event;
             }
@@ -617,10 +618,10 @@ namespace Spoke
 
                 var @event = Configuration.Database().GetEvent( eventId );
 
-                if ( @event.TopicCount != @event.EventTopics.Count )
-                {
-                    @event.EventTopics.AddRange( SaveEventTopics( @event ) );
-                }
+                //if ( @event.TopicCount != @event.EventTopics.Count )
+                //{
+                //    @event.EventTopics.AddRange( SaveEventTopics( @event ) );
+                //}
 
                 var result = ExceptionWrapper<object>( () =>
                 {
@@ -2227,13 +2228,9 @@ function processTransform(eventData, topicData) {{
                 public List<string> GetAllEventNames()
                 {
                     var cmd = GetDbCommand()
-                     .SetCommandText( @"
-SELECT DISTINCT
-    Value
-FROM
-    dbo.EventTopic
-WHERE
-    [Key] = 'EVENT_NAME'" );
+                     .SetCommandText(@"
+select distinct TopicData -> 'EVENT_NAME' 
+from ""Event"";");
 
                     var eventNames = cmd.ExecuteToList<string>();
 
@@ -2247,11 +2244,9 @@ WHERE
                 public List<string> GetAllTopicKeys()
                 {
                     var cmd = GetDbCommand()
-                    .SetCommandText( @"
-SELECT DISTINCT
-    [Key]
-FROM
-    dbo.EventTopic" );
+                    .SetCommandText(@"
+select distinct jsonb_object_keys(TopicData) 
+from ""Event"";");
 
                     var topicKeys = cmd.ExecuteToList<string>();
 
@@ -2266,28 +2261,10 @@ FROM
                 public Models.Event GetEvent( object eventId )
                 {
                     var cmd = GetDbCommand()
-                    .SetCommandText( @"
-SELECT
-    e.EventId
-   ,e.EventData
-   ,e.TopicData
-   ,e.TopicCount
-   ,e.CreatedByHostName AS CreatedByHostName
-   ,e.CreatedByUser
-   ,e.CreatedByApplication
-   ,e.CreateDate
-   ,et.EventTopicId
-   ,et.[Key]
-   ,et.Value
-   ,et.CreatedByHostName AS TopicCreatedByHostName
-   ,et.CreatedByUser AS TopicCreatedByUser
-   ,et.CreatedByApplication AS TopicCreatedByApplication
-   ,et.CreateDate AS TopicCreateDate
-FROM
-    dbo.Event e
-    LEFT JOIN dbo.EventTopic et ON et.EventId = e.EventId
-WHERE
-    e.EventId = @eventId" )
+                    .SetCommandText(@"
+select e.*
+from ""Event"" e
+where EventId = @eventId;")
                     .AddParameter( "@eventId", eventId, DbType.Int64 );
 
                     var result = cmd.ExecuteToDynamicList();
@@ -2308,49 +2285,60 @@ WHERE
 
                     var cmd = GetDbCommand()
                         .SetCommandText(@"
-SELECT 
-    E.EventId
-   ,E.EventData
-   ,E.TopicData
-   ,E.TopicCount
-   ,E.CreatedByHostName AS CreatedByHostName
-   ,E.CreatedByUser
-   ,E.CreatedByApplication
-   ,E.CreateDate
-   ,et.EventTopicId
-   ,et.[Key]
-   ,et.Value
-   ,et.CreatedByHostName AS TopicCreatedByHostName
-   ,et.CreatedByUser AS TopicCreatedByUser
-   ,et.CreatedByApplication AS TopicCreatedByApplication
-   ,et.CreateDate AS TopicCreateDate
-FROM
-    dbo.[Event] E
-    LEFT JOIN dbo.EventTopic et ON et.EventId = e.EventId
-    {0}
-ORDER BY
-    E.EventId DESC")
-                        //.AddParameter("@count", count, DbType.Int32)
+select * 
+from ""Event"" e
+{0}
+order by e.EventId desc
+limit @count; ")
+                        .AddParameter("@count", count, DbType.Int32)
                         ;
 
-                    var joins = string.Empty;
+                    var wheres = string.Empty;
                     if (!string.IsNullOrEmpty(eventName))
                     {
-                        joins += @"
-INNER JOIN dbo.EventTopic T1 ON T1.EventId = E.EventId
-                                AND T1.[Key] = 'EVENT_NAME'
-                                AND T1.Value = @eventName ";
+                        wheres += @"
+where TopicData -> 'EVENT_NAME' ? @eventName
+";
                         cmd.AddParameter("@eventName", eventName, DbType.AnsiString);
                     }
                     if (!string.IsNullOrEmpty(topicKey))
                     {
-                        joins += @"
-INNER JOIN dbo.EventTopic T2 ON T2.EventId = E.EventId
-                                AND T2.[Key] = @topicKey";
+                        if (string.IsNullOrEmpty(wheres))
+                        {
+                            wheres += @" where ";
+                        }
+                        else
+                        {
+                            wheres += @" and ";
+                        }
+
+                        wheres += @"
+TopicData ? @topicKey ";
                         cmd.AddParameter("@topicKey", topicKey, DbType.AnsiString);
                     }
 
-                    cmd.SetCommandText(string.Format(cmd.DbCommand.CommandText, joins));
+
+//                    var joins = string.Empty;
+//                    if (!string.IsNullOrEmpty(eventName))
+//                    {
+//                        joins += @"
+//INNER JOIN dbo.EventTopic T1 ON T1.EventId = E.EventId
+//                                AND T1.[Key] = 'EVENT_NAME'
+//                                AND T1.Value = @eventName ";
+//                        cmd.AddParameter("@eventName", eventName, DbType.AnsiString);
+//                    }
+//                    if (!string.IsNullOrEmpty(topicKey))
+//                    {
+//                        joins += @"
+//INNER JOIN dbo.EventTopic T2 ON T2.EventId = E.EventId
+//                                AND T2.[Key] = @topicKey";
+//                        cmd.AddParameter("@topicKey", topicKey, DbType.AnsiString);
+//                    }
+
+                    cmd.SetCommandText(string.Format(cmd.DbCommand.CommandText, 
+                        //joins
+                        wheres
+                        ));
 
                     var dbResult = cmd.ExecuteToDynamicList();
 
@@ -2364,11 +2352,6 @@ INNER JOIN dbo.EventTopic T2 ON T2.EventId = E.EventId
                             distinctEvents[eventId].Add(@event);
                         else
                             distinctEvents.Add(eventId, new List<dynamic> { @event });
-
-                        if (distinctEvents.Count >= count)
-                        {
-                            break;
-                        }
                     }
 
                     var events = new ConcurrentBag<Models.Event>();
@@ -2391,57 +2374,86 @@ INNER JOIN dbo.EventTopic T2 ON T2.EventId = E.EventId
                     var count = eventCount ?? 100;
 
                     var cmd = GetDbCommand()
-                        .SetCommandText( @"
-SELECT
-    E.EventId
-   ,E.EventData
-   ,E.TopicData
-   ,E.TopicCount
-   ,E.CreatedByHostName AS CreatedByHostName
-   ,E.CreatedByUser
-   ,E.CreatedByApplication
-   ,E.CreateDate
-   ,et.EventTopicId
-   ,et.[Key]
-   ,et.Value
-   ,et.CreatedByHostName AS TopicCreatedByHostName
-   ,et.CreatedByUser AS TopicCreatedByUser
-   ,et.CreatedByApplication AS TopicCreatedByApplication
-   ,et.CreateDate AS TopicCreateDate
-FROM
-    dbo.[Event] E
-    LEFT JOIN dbo.EventTopic et ON et.EventId = e.EventId
-    {0}
-WHERE
-    E.EventId IN (
-        SELECT TOP ( @count )
-            EventId
-        FROM
-            dbo.Event
-        ORDER BY 
-            EventId DESC )
-ORDER BY
-    E.EventId DESC" )
-                        .AddParameter( "@count", count, DbType.Int32 );
+                        .SetCommandText(@"
+select * 
+from ""Event"" e
+{0}
+order by e.EventId desc; ")
+                        .AddParameter("@count", count, DbType.Int32)
+                        ;
 
-                    var joins = string.Empty;
-                    if ( !string.IsNullOrEmpty( eventName ) )
+                    var wheres = @"
+where EventId >= (select (max(EventId) - @count) from ""Event"")";
+
+
+                    if (!string.IsNullOrEmpty(eventName))
                     {
-                        joins += @"
-INNER JOIN dbo.EventTopic T1 ON T1.EventId = E.EventId
-                                AND T1.[Key] = 'EVENT_NAME'
-                                AND T1.Value = @eventName ";
-                        cmd.AddParameter( "@eventName", eventName, DbType.AnsiString );
+                        wheres += @"
+and TopicData -> 'EVENT_NAME' ? @eventName
+";
+                        cmd.AddParameter("@eventName", eventName, DbType.AnsiString);
                     }
-                    if ( !string.IsNullOrEmpty( topicKey ) )
+                    if (!string.IsNullOrEmpty(topicKey))
                     {
-                        joins += @"
-INNER JOIN dbo.EventTopic T2 ON T2.EventId = E.EventId
-                                AND T2.[Key] = @topicKey";
-                        cmd.AddParameter( "@topicKey", topicKey, DbType.AnsiString );
+                        wheres += @"
+and TopicData ? @topicKey ";
+                        cmd.AddParameter("@topicKey", topicKey, DbType.AnsiString);
                     }
 
-                    cmd.SetCommandText( string.Format( cmd.DbCommand.CommandText, joins ) );
+                    cmd.SetCommandText(string.Format(cmd.DbCommand.CommandText, wheres));
+
+                    //                    var cmd = GetDbCommand()
+                    //                        .SetCommandText( @"
+                    //SELECT
+                    //    E.EventId
+                    //   ,E.EventData
+                    //   ,E.TopicData
+                    //   ,E.TopicCount
+                    //   ,E.CreatedByHostName AS CreatedByHostName
+                    //   ,E.CreatedByUser
+                    //   ,E.CreatedByApplication
+                    //   ,E.CreateDate
+                    //   ,et.EventTopicId
+                    //   ,et.[Key]
+                    //   ,et.Value
+                    //   ,et.CreatedByHostName AS TopicCreatedByHostName
+                    //   ,et.CreatedByUser AS TopicCreatedByUser
+                    //   ,et.CreatedByApplication AS TopicCreatedByApplication
+                    //   ,et.CreateDate AS TopicCreateDate
+                    //FROM
+                    //    dbo.[Event] E
+                    //    LEFT JOIN dbo.EventTopic et ON et.EventId = e.EventId
+                    //    {0}
+                    //WHERE
+                    //    E.EventId IN (
+                    //        SELECT TOP ( @count )
+                    //            EventId
+                    //        FROM
+                    //            dbo.Event
+                    //        ORDER BY 
+                    //            EventId DESC )
+                    //ORDER BY
+                    //    E.EventId DESC" )
+                    //                        .AddParameter( "@count", count, DbType.Int32 );
+
+                    //                    var joins = string.Empty;
+                    //                    if ( !string.IsNullOrEmpty( eventName ) )
+                    //                    {
+                    //                        joins += @"
+                    //INNER JOIN dbo.EventTopic T1 ON T1.EventId = E.EventId
+                    //                                AND T1.[Key] = 'EVENT_NAME'
+                    //                                AND T1.Value = @eventName ";
+                    //                        cmd.AddParameter( "@eventName", eventName, DbType.AnsiString );
+                    //                    }
+                    //                    if ( !string.IsNullOrEmpty( topicKey ) )
+                    //                    {
+                    //                        joins += @"
+                    //INNER JOIN dbo.EventTopic T2 ON T2.EventId = E.EventId
+                    //                                AND T2.[Key] = @topicKey";
+                    //                        cmd.AddParameter( "@topicKey", topicKey, DbType.AnsiString );
+                    //                    }
+
+                    //                    cmd.SetCommandText( string.Format( cmd.DbCommand.CommandText, joins ) );
 
                     var dbResult = cmd.ExecuteToDynamicList();
 
@@ -2484,7 +2496,7 @@ SELECT
     ,CreatedByUser
     ,CreatedByApplication
 FROM
-    dbo.EventSubscription
+    EventSubscription
 WHERE
     EventId = @eventId
 " )
@@ -2518,8 +2530,8 @@ WHERE
                 public List<Models.EventSubscriptionActivity> GetEventSubscriptionActivities( object eventId, object subscriptionId, string activityCode, int? activityCount )
                 {
                     var cmd = GetDbCommand()
-                    .SetCommandText( @"
-SELECT {0}
+                    .SetCommandText(@"
+SELECT 
     A.EventSubscriptionActivityId
    ,A.ActivityTypeCode
    ,A.EventId
@@ -2531,11 +2543,12 @@ SELECT {0}
    ,A.CreatedByUser
    ,A.CreatedByApplication
 FROM
-    dbo.EventSubscriptionActivity A
-    LEFT JOIN dbo.EventSubscription ES ON ES.EventSubscriptionId = A.EventSubscriptionId
-{1}
+    EventSubscriptionActivity A
+    LEFT JOIN EventSubscription ES ON ES.EventSubscriptionId = A.EventSubscriptionId
+{0}
 ORDER BY
-    A.EventSubscriptionActivityId DESC" );
+    A.EventSubscriptionActivityId DESC
+{1}");
 
                     var topN = string.Empty;
                     activityCount = activityCount.HasValue
@@ -2543,7 +2556,7 @@ ORDER BY
                         : ( eventId == null || subscriptionId == null ) ? 100 : new int?();
                     if ( activityCount.HasValue )
                     {
-                        topN += "TOP ( @count )";
+                        topN += "limit @count";
                         cmd.AddParameter( "@count", activityCount.Value, DbType.Int32 );
                     }
 
@@ -2570,7 +2583,7 @@ ORDER BY
                         cmd.AddParameter( "@subscriptionId", subscriptionId, DbType.Int32 );
                     }
 
-                    cmd.SetCommandText( string.Format( cmd.DbCommand.CommandText, topN, conditional ) );
+                    cmd.SetCommandText( string.Format( cmd.DbCommand.CommandText, conditional, topN) );
 
                     return cmd.ExecuteToList<Models.EventSubscriptionActivity>();
                 }
@@ -2607,15 +2620,15 @@ ORDER BY
 SELECT DISTINCT
     E.EventId
 FROM
-    dbo.[Event] E
-    LEFT JOIN dbo.EventSubscriptionActivity A ON A.EventId = E.EventId
+    ""Event"" E
+    LEFT JOIN EventSubscriptionActivity A ON A.EventId = E.EventId
                                                  AND ActivityTypeCode = 'SUBSCRIPTIONS_FOUND'
     LEFT JOIN ( SELECT
                     E.EventId
-                   ,COUNT(*) AS TopicCount
+                   ,E.TopicCount
                 FROM
-                    dbo.[Event] E
-                    JOIN dbo.EventTopic T ON T.EventId = E.EventId
+                    ""Event"" E
+                    JOIN EventTopic T ON T.EventId = E.EventId
                 GROUP BY
                     E.EventId
               ) TC ON TC.EventId = E.EventId
@@ -2666,20 +2679,12 @@ SELECT
    ,E.CreatedByUser
    ,E.CreatedByApplication
    ,E.CreateDate
-   ,ET.EventTopicId
-   ,ET.[Key]
-   ,ET.Value
-   ,ET.CreatedByHostName AS TopicCreatedByHostName
-   ,ET.CreatedByUser AS TopicCreatedByUser
-   ,ET.CreatedByApplication AS TopicCreatedByApplication
-   ,ET.CreateDate AS TopicCreateDate
 FROM
-    dbo.[Event] E
-    INNER JOIN dbo.EventSubscription ES ON ES.EventId = E.EventId
-    INNER JOIN dbo.Subscription S ON S.SubscriptionId = ES.SubscriptionId
-    INNER JOIN dbo.SubscriptionRevision R ON R.SubscriptionRevisionId = S.CurrentSubscriptionRevisionId
-    LEFT JOIN dbo.EventTopic et ON et.EventId = E.EventId
-    LEFT JOIN dbo.EventSubscriptionActivity A ON A.EventId = E.EventId
+    ""Event"" E
+    INNER JOIN EventSubscription ES ON ES.EventId = E.EventId
+    INNER JOIN Subscription S ON S.SubscriptionId = ES.SubscriptionId
+    INNER JOIN SubscriptionRevision R ON R.SubscriptionRevisionId = S.CurrentSubscriptionRevisionId
+    LEFT JOIN EventSubscriptionActivity A ON A.EventId = E.EventId
                                                  AND A.EventSubscriptionId = ES.EventSubscriptionId
                                                  AND ActivityTypeCode = 'SUBSCRIPTION_RESPONSE_OK'
 WHERE
@@ -2759,7 +2764,7 @@ SELECT
    ,R.TransformFunction
    ,R.AbortAfterMinutes
    ,R.RequestType
-   ,T.[Key]
+   ,T.""Key""
    ,T.Value
    ,T.OperatorTypeCode
    ,R.CreateDate
@@ -2771,10 +2776,10 @@ SELECT
    ,T.CreatedByUser AS TopicCreatedByUser
    ,T.CreatedByHostName AS TopicCreatedByHostName
 FROM
-    dbo.Subscription S
-    INNER JOIN dbo.SubscriptionRevision R ON R.SubscriptionId = S.SubscriptionId
+    Subscription S
+    INNER JOIN SubscriptionRevision R ON R.SubscriptionId = S.SubscriptionId
                                              AND R.SubscriptionRevisionId = S.CurrentSubscriptionRevisionId
-    INNER JOIN dbo.SubscriptionTopic T ON T.SubscriptionRevisionId = R.SubscriptionRevisionId
+    INNER JOIN SubscriptionTopic T ON T.SubscriptionRevisionId = R.SubscriptionRevisionId
 WHERE
     1=1
     {0}" );
@@ -2858,135 +2863,117 @@ WHERE
                 /// <param name="totalMinutes">The number of minutes to look back.</param>
                 /// <param name="offsetMinutes">The number of buffer minutes between now and the end of the time frame you are looking in.</param>
                 /// <returns>List of <see cref="Models.ClockEvent"/></returns>
-                public List<Models.ClockEvent> GetMissingClockEvents(
-                    int? totalMinutes,
-                    int? offsetMinutes
-                    )
+                public List<Models.ClockEvent> GetMissingClockEvents(int? totalMinutes, int? offsetMinutes)
                 {
                     const string query = @"
-IF OBJECT_ID('tempdb..#tmp') IS NOT NULL
-  DROP TABLE #tmp
+DO
+$do$
+begin
+drop table if exists tmp;
+create temporary table tmp (
+	""Offset"" int,
+    OffsetDate timestamp
+);
 
-CREATE TABLE #tmp
-(
-	 Offset int
-	, OffsetDate datetime
-)
+FOR i IN 1..(@TotalMinutes) LOOP
+    insert into tmp
+    select i, null;
+END LOOP;
 
-INSERT INTO #tmp
-SELECT TOP (@TotalMinutes)
-  ROW_NUMBER() OVER (ORDER BY C1.id)
-  , NULL
-FROM          syscolumns AS C1
-CROSS JOIN    syscolumns AS C2
-
-UPDATE #tmp 
+UPDATE tmp
 SET
-	Offset = Offset
-	, OffsetDate = (DATEADD(MINUTE, -Offset, @EndDate))
-FROM #tmp
+    OffsetDate = @EndDate - ""Offset"" * INTERVAL '1 minute'
+FROM tmp;
 
-IF OBJECT_ID('tempdb..#tmp2') IS NOT NULL
-  DROP TABLE #tmp2
+drop table if exists tmp2;
+create temporary table tmp2 (
+    EventId int,
+    ""Year"" varchar(100),
+    ""Month"" varchar(100),
+    ""Day"" varchar(100),
+    ""Hour"" varchar(100),
+    ""Minute"" varchar(100)
+);
 
-CREATE TABLE #tmp2
-(
-	 EventId INT
-	, [Year] VARCHAR(100)
-	, [Month] VARCHAR(100)
-	, [Day] VARCHAR(100)
-	, [Hour] VARCHAR(100)
-	, [Minute] VARCHAR(100)
-)
-
-DECLARE @StartDate DATETIME = (SELECT DATEADD(MINUTE, -1, MIN(OffsetDate)) FROM #tmp)
-
-INSERT INTO #tmp2
-SELECT 
-	E.EventId
-	, NULL
-	, NULL
-	, NULL
-	, NULL
-	, NULL
-FROM dbo.[Event] E (NOLOCK)
-JOIN dbo.EventTopic T (NOLOCK)
-ON T.EventId = E.EventId
-WHERE E.CreateDate > @StartDate
-  AND T.[Key] = 'EVENT_NAME'
-  AND T.Value = 'ClockEvent'
-
-IF OBJECT_ID('tempdb..#tmp3') IS NOT NULL
-  DROP TABLE #tmp3
-
-CREATE TABLE #tmp3
-(
-	 EventId INT
-	, [Key] VARCHAR(100)
-	, [Value] VARCHAR(100)
-)
-
-INSERT INTO #tmp3
+INSERT INTO tmp2
 SELECT
-  E.EventId
-  , [Key]
-  , [Value]
-FROM dbo.EventTopic T (NOLOCK)
-JOIN #tmp2 E
-ON E.EventId = T.EventId
+    E.EventId
+	, NULL
+	, NULL
+	, NULL
+	, NULL
+	, NULL
+FROM ""Event"" E
+WHERE E.CreateDate > (select min(OffsetDate) - 1 * INTERVAL '1 minute' from tmp)
+  AND TopicData -> 'EVENT_NAME' ? 'ClockEvent';
 
-UPDATE #tmp2
-SET [Year] = T1.Value
-, [Month] = T2.value
-, [Day] = T3.value
-, [Hour] = T4.value
-, [Minute] = T5.Value
-FROM #tmp2 E
-JOIN #tmp3 T1 (NOLOCK)
-ON T1.EventId = E.EventId
-  AND T1.[Key] = 'Year'
-JOIN #tmp3 T2 (NOLOCK)
-ON T2.EventId = E.EventId
-  AND T2.[Key] = 'Month'
-JOIN #tmp3 T3 (NOLOCK)
-ON T3.EventId = E.EventId
-  AND T3.[Key] = 'Day'
-JOIN #tmp3 T4 (NOLOCK)
-ON T4.EventId = E.EventId
-  AND T4.[Key] = 'Hour'
-JOIN #tmp3 T5 (NOLOCK)
-ON T5.EventId = E.EventId
-  AND T5.[Key] = 'Minute'
- 
+drop table if exists tmp3;
+create temporary table tmp3 (
+    EventId int,
+    ""Key"" varchar(100),
+    ""Value"" varchar(100)
+);
+
+INSERT INTO tmp3
+select e.EventId,
+	j.""key"" as Key,
+	j.""value"" as Value
+from ""Event"" e
+join jsonb_each((select TopicData from ""Event"" e)) j
+    on e.EventId = e.EventId
+where e.EventId in (select EventId from tmp2);
+
+UPDATE tmp2
+SET ""Year"" = T1.Value
+    , ""Month"" = T2.value
+    , ""Day"" = T3.value
+    , ""Hour"" = T4.value
+    , ""Minute"" = T5.Value
+FROM tmp2 E
+JOIN tmp3 T1
+    ON T1.EventId = E.EventId
+    AND T1.""Key"" = 'Year'
+JOIN tmp3 T2
+    ON T2.EventId = E.EventId
+    AND T2.""Key"" = 'Month'
+JOIN tmp3 T3
+    ON T3.EventId = E.EventId
+    AND T3.""Key"" = 'Day'
+JOIN tmp3 T4
+    ON T4.EventId = E.EventId
+    AND T4.""Key"" = 'Hour'
+JOIN tmp3 T5
+    ON T5.EventId = E.EventId
+    AND T5.""Key"" = 'Minute';
+
 SELECT
-  D.[Year]
-  , D.[Month]
-  , D.[Day]
-  , D.[Hour]
-  , D.[Minute]
+  D.""Year""
+  , D.""Month""
+  , D.""Day""
+  , D.""Hour""
+  , D.""Minute""
 FROM
-(SELECT OffsetDate
- , CAST(DATEPART(YEAR, OffsetDate) AS VARCHAR) AS [Year]
- , CAST(DATEPART(MONTH, OffsetDate) AS VARCHAR) AS [Month]
- , CAST(DATEPART(DAY, OffsetDate) AS VARCHAR) AS [Day]
- , CAST(DATEPART(HOUR, OffsetDate) AS VARCHAR) AS [Hour]
- , CAST(DATEPART(MINUTE, OffsetDate) AS VARCHAR) AS [Minute]
- FROM #tmp) D
+    (SELECT OffsetDate
+     , CAST(DATEPART('Year', OffsetDate) AS VARCHAR) AS ""Year""
+     , CAST(DATEPART('Month', OffsetDate) AS VARCHAR) AS ""Month""
+     , CAST(DATEPART('Day', OffsetDate) AS VARCHAR) AS ""Day""
+     , CAST(DATEPART('Hour', OffsetDate) AS VARCHAR) AS ""Hour""
+     , CAST(DATEPART('Minute', OffsetDate) AS VARCHAR) AS ""Minute""
+     FROM tmp) D
 LEFT JOIN
-#tmp2 T
-ON T.[Year] = D.[Year]
-  AND T.[Month] = D.[Month]
-  AND T.[Day] = D.[Day]
-  AND T.[Hour] = D.[Hour]
-  AND T.[Minute] = D.[Minute]
-WHERE T.[Minute] IS NULL
+tmp2 T
+    ON T.""Year"" = D.""Year""
+    AND T.""Month"" = D.""Month""
+    AND T.""Day"" = D.""Day""
+    AND T.""Hour"" = D.""Hour""
+    AND T.""Minute"" = D.""Minute""
+WHERE T.""Minute"" IS NULL;
 
-IF OBJECT_ID('tempdb..#tmp') IS NOT NULL
-  DROP TABLE #tmp
-IF OBJECT_ID('tempdb..#tmp2') IS NOT NULL
-  DROP TABLE #tmp2
-IF OBJECT_ID('tempdb..#tmp3') IS NOT NULL
-  DROP TABLE #tmp3
+drop table if exists tmp;
+drop table if exists tmp2;
+drop table if exists tmp3;
+end
+$do$
 ";
                     var cmd = GetDbCommand()
                         .SetCommandText( query )
@@ -3017,7 +3004,7 @@ IF OBJECT_ID('tempdb..#tmp3') IS NOT NULL
                     };
 
                     var cmd = GetDbCommand()
-                        .GenerateInsertForSqlServer( obj, "dbo.Event" );
+                        .GenerateInsertForPostgreSQL( obj, "\"Event\"" );
 
                     @event.EventId = Convert.ToInt64( cmd.ExecuteScalar() );
 
@@ -3042,7 +3029,7 @@ IF OBJECT_ID('tempdb..#tmp3') IS NOT NULL
                         return eventTopics;
 
                     var cmd = GetDbCommand()
-                        .GenerateInsertsForSqlServer( eventTopics, "dbo.EventTopic" );
+                        .GenerateInsertsForPostgreSQL( eventTopics, "dbo.EventTopic" );
 
                     var ids = cmd.ExecuteToList<long>();
 
@@ -3062,7 +3049,7 @@ IF OBJECT_ID('tempdb..#tmp3') IS NOT NULL
                 public Models.EventSubscriptionActivity SaveEventSubscriptionActivity( Models.EventSubscriptionActivity activity )
                 {
                     var cmd = GetDbCommand()
-                    .GenerateInsertForSqlServer( new
+                    .GenerateInsertForPostgreSQL( new
                     {
                         activity.ActivityTypeCode,
                         activity.EventId,
@@ -3071,7 +3058,7 @@ IF OBJECT_ID('tempdb..#tmp3') IS NOT NULL
                         activity.CreateDate,
                         activity.CreatedByApplication,
                         activity.CreatedByUser
-                    }, "dbo.EventSubscriptionActivity" );
+                    }, "EventSubscriptionActivity" );
 
                     activity.EventSubscriptionActivityId = Convert.ToInt64( cmd.ExecuteScalar() );
 
@@ -3088,7 +3075,7 @@ IF OBJECT_ID('tempdb..#tmp3') IS NOT NULL
                         return eventSubscriptions;
 
                     var cmd = GetDbCommand()
-                        .GenerateInsertsForSqlServer( eventSubscriptions.Select( x =>
+                        .GenerateInsertsForPostgreSQL( eventSubscriptions.Select( x =>
                             new
                             {
                                 x.EventId,
@@ -3096,7 +3083,7 @@ IF OBJECT_ID('tempdb..#tmp3') IS NOT NULL
                                 x.CreateDate,
                                 x.CreatedByApplication,
                                 x.CreatedByUser
-                            } ).ToList(), "dbo.EventSubscription" );
+                            } ).ToList(), "EventSubscription" );
 
                     var ids = cmd.ExecuteToList<long>();
 
@@ -3119,20 +3106,20 @@ IF OBJECT_ID('tempdb..#tmp3') IS NOT NULL
                     if ( subscription.SubscriptionId == null )
                     {
                         cmd = GetDbCommand()
-                            .GenerateInsertForSqlServer( new
+                            .GenerateInsertForPostgreSQL( new
                             {
                                 CurrentSubscriptionRevisionId = 0,
                                 CreatedByHostName = subscription.CreatedByHostName,
                                 subscription.CreateDate,
                                 subscription.CreatedByUser,
                                 subscription.CreatedByApplication
-                            }, "dbo.Subscription" );
+                            }, "Subscription" );
 
                         subscription.SubscriptionId = cmd.ExecuteScalar<int>();
                     }
 
                     cmd = GetDbCommand()
-                        .GenerateInsertForSqlServer( new
+                        .GenerateInsertForPostgreSQL( new
                         {
                             subscription.SubscriptionId,
                             subscription.SubscriptionName,
@@ -3147,14 +3134,14 @@ IF OBJECT_ID('tempdb..#tmp3') IS NOT NULL
                             subscription.CreateDate,
                             subscription.CreatedByUser,
                             subscription.CreatedByApplication
-                        }, "dbo.SubscriptionRevision" );
+                        }, "SubscriptionRevision" );
 
                     var revisionId = cmd.ExecuteScalar<int>();
 
                     cmd = GetDbCommand()
                         .SetCommandText( @"
 UPDATE
-    dbo.Subscription
+    Subscription
 SET
     CurrentSubscriptionRevisionId = @revisionId
 WHERE
@@ -3166,7 +3153,7 @@ WHERE
                     cmd.ExecuteNonQuery();
 
                     cmd = GetDbCommand()
-                        .GenerateInsertsForSqlServer( subscription.Topics.Select( x => new
+                        .GenerateInsertsForPostgreSQL( subscription.Topics.Select( x => new
                         {
                             SubscriptionRevisionId = revisionId,
                             x.Key,
@@ -3195,20 +3182,20 @@ WHERE
                 /// <returns><see cref="Models.Mutex"/></returns>
                 public Models.Mutex GetActiveMutex( string mutexKey )
                 {
-                    var hash = GenerateHash( mutexKey );
+                    long hash = Utils.GetInt64HashCode(mutexKey); //new BigInteger(GenerateHash(mutexKey)).ToLong();
 
                     var cmd = GetDbCommand()
                         .SetCommandText( @"
 SELECT TOP 1
     em.EventMutexId
 FROM
-    [dbo].[EventMutex] em
-    LEFT JOIN [dbo].[EventMutexReleased] emr ON emr.EventMutexId = em.EventMutexId
+    EventMutex em
+    LEFT JOIN EventMutexReleased emr ON emr.EventMutexId = em.EventMutexId
 WHERE
     Hash = @hash
-    AND Expiration > GETDATE()
+    AND Expiration > current_timestamp
     AND emr.EventMutexReleasedId IS NULL
-" ).AddParameter( "@hash", hash, DbType.Binary );
+" ).AddParameter( "@hash", hash, DbType.Int64 );
 
                     var id = cmd.ExecuteScalar<long?>();
 
@@ -3223,54 +3210,14 @@ WHERE
                 /// <returns><see cref="Models.Mutex"/></returns>
                 public Models.Mutex TryAcquireMutex( string mutexKey, TimeSpan timeToLive )
                 {
-                    var hash = GenerateHash( mutexKey );
+                    //long hash = Utils.GetInt64HashCode(mutexKey);//Utils.GetHashNumber(MD5.Create(), Utils.GetBytes(mutexKey)).ToLong(); //GenerateHash( mutexKey );
 
                     var cmd = GetDbCommand()
-                        .SetCommandText( @"
--- acquire lock
-DECLARE @result INT
-EXEC @result = sp_getapplock @Resource = @key, -- name of the mutex
-    @LockMode = 'Exclusive', --This session is the only one who can have this lock.
-    @LockOwner = 'Session', --lock lives while this session is active.
-    @LockTimeout = @timeout,  -- anyone else trying to acquire this lock will wait this long before the thread returns a negative result. 
-    @DbPrincipal = 'public'
-
--- lock acquired
-IF @result IN ( 0, 1 )
-    BEGIN
-        IF NOT EXISTS ( SELECT TOP 1
-                            1
-                        FROM
-                            [dbo].[EventMutex] em
-                            LEFT JOIN [dbo].[EventMutexReleased] emr ON emr.EventMutexId = em.EventMutexId
-                        WHERE
-                            Hash = @hash
-                            AND Expiration > GETDATE()
-                            AND emr.EventMutexReleasedId IS NULL )
-            BEGIN 
-                INSERT  INTO [dbo].[EventMutex]
-                        ( [Key]
-                        ,[Hash]
-                        ,[Expiration]
-                        ,[CreatedByUser]
-                        ,[CreatedByApplication]
-                        )
-                VALUES
-                        ( @key
-                        ,@hash
-                        ,@expiration
-                        ,@user
-                        ,@app
-                        )
-
-                SELECT SCOPE_IDENTITY();
-            END 
-
-        EXEC sp_releaseapplock @Resource = @key, @LockOwner = 'Session'
-    END" )
+                        .SetCommandText(@"
+select tryacquiremutex(@key, @expiration, @user, @app);")
                         .AddParameter( "@key", mutexKey, DbType.AnsiString )
-                        .AddParameter( "@timeout", Configuration.MutexAcquisitionWaitTime, DbType.Int32 )
-                        .AddParameter( "@hash", hash, DbType.Binary )
+                        //.AddParameter( "@timeout", Configuration.MutexAcquisitionWaitTime, DbType.Int32 )
+                        //.AddParameter( "@hash", hash, DbType.Int64 )
                         .AddParameter( "@expiration", DateTime.Now.Add( timeToLive ), DbType.DateTime )
                         .AddParameter( "@user", Configuration.UserName, DbType.AnsiString )
                         .AddParameter( "@app", Configuration.AppName, DbType.AnsiString );
@@ -3292,7 +3239,7 @@ IF @result IN ( 0, 1 )
                         return;
 
                     var cmd = GetDbCommand()
-                        .GenerateInsertForSqlServer(
+                        .GenerateInsertForPostgreSQL(
                             new
                             {
                                 EventMutexId = mutex.MutexId,
@@ -3378,12 +3325,12 @@ IF @result IN ( 0, 1 )
 
                     var connectionString = Configuration.DatabaseConnectionString();
 
-                    var builder = new SqlConnectionStringBuilder( connectionString )
-                    {
-                        ApplicationName = Configuration.AppName
-                    };
+                    //var builder = new SqlConnectionStringBuilder( connectionString )
+                    //{
+                    //    ApplicationName = Configuration.AppName
+                    //};
 
-                    return SequelocityDotNet.Sequelocity.GetDatabaseCommandForSqlServer( builder.ToString() );
+                    return SequelocityDotNet.Sequelocity.GetDatabaseCommandForPostgreSQL( connectionString );
                 }
 
                 /// <summary>
@@ -3454,6 +3401,41 @@ IF @result IN ( 0, 1 )
                     return JsonConvert.DeserializeObject<T>( json );
                 }
             }
+
+            public static BigInteger GetHashNumber(HashAlgorithm algorithm, byte[] data)
+            {
+                return new BigInteger(algorithm.ComputeHash(data));
+            }
+
+            public static byte[] GetBytes (string str)
+            {
+                byte[] bytes = new byte[str.Length * sizeof(char)];
+                System.Buffer.BlockCopy(str.ToCharArray(), 0, bytes, 0, bytes.Length);
+                return bytes;
+            }
+
+            public static Int64 GetInt64HashCode(string strText)
+            {
+                Int64 hashCode = 0;
+                if (!string.IsNullOrEmpty(strText))
+                {
+                    //Unicode Encode Covering all characterset
+                    byte[] byteContents = Encoding.Unicode.GetBytes(strText);
+                    System.Security.Cryptography.SHA256 hash =
+                    new System.Security.Cryptography.SHA256CryptoServiceProvider();
+                    byte[] hashText = hash.ComputeHash(byteContents);
+                    //32Byte hashText separate
+                    //hashCodeStart = 0~7  8Byte
+                    //hashCodeMedium = 8~23  8Byte
+                    //hashCodeEnd = 24~31  8Byte
+                    //and Fold
+                    Int64 hashCodeStart = BitConverter.ToInt64(hashText, 0);
+                    Int64 hashCodeMedium = BitConverter.ToInt64(hashText, 8);
+                    Int64 hashCodeEnd = BitConverter.ToInt64(hashText, 24);
+                    hashCode = hashCodeStart ^ hashCodeMedium ^ hashCodeEnd;
+                }
+                return (hashCode);
+            }
         }
 
         /// <summary>
@@ -3487,7 +3469,7 @@ IF @result IN ( 0, 1 )
                 };
             public Utils.JsonSerializer JsonSerializer = new Utils.JsonSerializer();
             public Func<DatabaseIO.ISpokeDatabase> Database = () => new DatabaseIO.SpokeSqlDatabase();
-            public Func<string> DatabaseConnectionString = () => ConfigurationManager.ConnectionStrings[ "spoke" ].ConnectionString;
+            public Func<string> DatabaseConnectionString = () => ConfigurationManager.ConnectionStrings[ "spokePostgres" ].ConnectionString;
         }
     }
 

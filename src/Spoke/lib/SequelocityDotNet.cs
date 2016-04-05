@@ -199,6 +199,29 @@ namespace SequelocityDotNet
             return GetDatabaseCommand( connectionStringOrName, "MySql.Data.MySqlClient" );
         }
 
+        /// <summary>Gets a <see cref="DatabaseCommand" /> that interacts with a PostgreSQL database.</summary>
+        /// <param name="connectionStringOrName">Connection string or connection string name.</param>
+        /// <returns>A new <see cref="DatabaseCommand" /> instance.</returns>
+        /// <exception cref="ConnectionStringNotFoundException">
+        /// Thrown when no ConnectionString could be found. A valid ConnectionString or Connection String Name must be supplied in
+        /// the 'connectionStringOrName' parameter or by setting a default in either the
+        /// 'DatabaseCommand.ConfigurationSettings.Default.ConnectionStringName' or
+        /// 'DatabaseCommand.ConfigurationSettings.Default.ConnectionString' properties.
+        /// </exception>
+        /// <exception cref="DbProviderFactoryNotFoundException">
+        /// Thrown when no DbProviderFactory could be found. A DbProviderFactory invariant name must be supplied in the connection
+        /// string settings 'providerName' attribute in the applications config file, in the 'dbProviderFactoryInvariantName'
+        /// parameter, or by setting a default in the
+        /// 'DatabaseCommand.ConfigurationSettings.Default.DbProviderFactoryInvariantName' property.
+        /// </exception>
+        /// <exception cref="Exception">
+        /// An unknown error occurred creating a connection as the call to DbProviderFactory.CreateConnection() returned null.
+        /// </exception>
+        public static DatabaseCommand GetDatabaseCommandForPostgreSQL(string connectionStringOrName = null)
+        {
+            return GetDatabaseCommand(connectionStringOrName, "Npgsql");
+        }
+
         /// <summary>Attempts to create a <see cref="DbConnection" /> using several strategies.</summary>
         /// <remarks>
         /// This method attempts to use several strategies to locate a ConnectionString and DbProviderFactory in order to create a
@@ -351,7 +374,7 @@ namespace SequelocityDotNet
             /// <summary>Initializes the <see cref="Sequelocity.ConfigurationSettings" />.</summary>
             public static void InitializeConfigurationSettings()
             {
-                GetConnectionStringByNameAccessor = connectionStringName => ConfigurationManager.ConnectionStrings[connectionStringName];
+                GetConnectionStringByNameAccessor = connectionStringName => ConfigurationManager.ConnectionStrings[ connectionStringName ];
             }
 
             /// <summary>
@@ -390,7 +413,7 @@ namespace SequelocityDotNet
                 /// <param name="exception">Unhandled exception.</param>
                 /// <param name="databaseCommand"><see cref="DatabaseCommand" /> instance.</param>
                 public delegate void DatabaseCommandUnhandledExceptionEventHandler( Exception exception, DatabaseCommand databaseCommand );
-
+                
                 /// <summary>Event triggered when an unhandled exception occurs.</summary>
                 public static readonly List<DatabaseCommandUnhandledExceptionEventHandler> DatabaseCommandUnhandledExceptionEventHandlers = new List<DatabaseCommandUnhandledExceptionEventHandler>();
 
@@ -526,7 +549,7 @@ namespace SequelocityDotNet
                         {
                             DbCommand.CloseAndDispose();
                         }
-                        // ReSharper disable once EmptyGeneralCatchClause - CA1065: Do not raise exceptions in unexpected locations: http://msdn.microsoft.com/en-us/library/bb386039.aspx
+                            // ReSharper disable once EmptyGeneralCatchClause - CA1065: Do not raise exceptions in unexpected locations: http://msdn.microsoft.com/en-us/library/bb386039.aspx
                         catch
                         {
                             // Don't throw an exception while disposing
@@ -604,6 +627,19 @@ namespace SequelocityDotNet
         public static DatabaseCommand AddParameter( this DatabaseCommand databaseCommand, string parameterName, object parameterValue, DbType dbType )
         {
             databaseCommand.DbCommand.AddParameter( parameterName, parameterValue, dbType );
+
+            return databaseCommand;
+        }
+
+        /// <summary>Adds a parameter whose default value is <see cref="DBNull"/> when unassigned, to the <see cref="DatabaseCommand" />.</summary>
+        /// <param name="databaseCommand"><see cref="DatabaseCommand" /> instance.</param>
+        /// <param name="parameterName">Parameter name.</param>
+        /// <param name="parameterValue">Parameter value.</param>
+        /// <param name="dbType">Parameter type.</param>
+        /// <returns>The given <see cref="DatabaseCommand" /> instance.</returns>
+        public static DatabaseCommand AddNullableParameter( this DatabaseCommand databaseCommand, string parameterName, object parameterValue, DbType dbType )
+        {
+            databaseCommand.DbCommand.AddNullableParameter( parameterName, parameterValue, dbType );
 
             return databaseCommand;
         }
@@ -761,7 +797,7 @@ namespace SequelocityDotNet
 
             return databaseCommand;
         }
-
+        
         /// <summary>
         /// Starts a database transaction and associates it with the <see cref="DatabaseCommand"/> instance.
         /// </summary>
@@ -770,7 +806,7 @@ namespace SequelocityDotNet
         public static DbTransaction BeginTransaction( this DatabaseCommand databaseCommand )
         {
             DbTransaction transaction = databaseCommand.DbCommand.BeginTransaction();
-
+            
             return transaction;
         }
 
@@ -880,6 +916,54 @@ namespace SequelocityDotNet
         public static DatabaseCommand GenerateInsertsForMySql<T>( this DatabaseCommand databaseCommand, List<T> listOfObjects, string tableName = null )
         {
             databaseCommand.DbCommand.GenerateInsertsForMySql( listOfObjects, tableName );
+
+            return databaseCommand;
+        }
+
+        /// <summary>
+        /// Generates a parameterized PostgreSQL INSERT statement from the given object and adds it to the
+        /// <see cref="DatabaseCommand" />.
+        /// <para>
+        /// Note that the generated query also selects the last inserted id using PostgreSQL's LastVal() function.
+        /// </para>
+        /// </summary>
+        /// <param name="databaseCommand"><see cref="DatabaseCommand" /> instance.</param>
+        /// <param name="obj">Object to generate the SQL INSERT statement from.</param>
+        /// <param name="tableName">Optional table name to insert into. If none is supplied, it will use the type name.</param>
+        /// <returns>The given <see cref="DatabaseCommand" /> instance.</returns>
+        /// <exception cref="ArgumentNullException">
+        /// The value of 'tableName' cannot be null when the object passed is an anonymous
+        /// type.
+        /// </exception>
+        public static DatabaseCommand GenerateInsertForPostgreSQL(this DatabaseCommand databaseCommand, object obj, string tableName = null)
+        {
+            databaseCommand.DbCommand.GenerateInsertForPostgreSQL(obj, tableName);
+
+            return databaseCommand;
+        }
+
+        /// <summary>
+        /// Generates a list of concatenated parameterized PostgreSQL INSERT statements from the given list of objects and adds it to
+        /// the <see cref="DatabaseCommand" />.
+        /// <para>
+        /// Note that the generated query also selects the last inserted id using PostgreSQL's LastVal() function.
+        /// </para>
+        /// </summary>
+        /// <typeparam name="T">Type of the objects in the list.</typeparam>
+        /// <param name="databaseCommand"><see cref="DatabaseCommand" /> instance.</param>
+        /// <param name="listOfObjects">List of objects to generate the SQL INSERT statements from.</param>
+        /// <param name="tableName">
+        /// Optional table name to insert into. If none is supplied, it will use the type name. Note that this parameter is
+        /// required when passing in an anonymous object or an <see cref="ArgumentNullException" /> will be thrown.
+        /// </param>
+        /// <returns>The given <see cref="DatabaseCommand" /> instance.</returns>
+        /// <exception cref="ArgumentNullException">
+        /// The value of 'tableName' cannot be null when the object passed is an anonymous
+        /// type.
+        /// </exception>
+        public static DatabaseCommand GenerateInsertsForPostgreSQL<T>(this DatabaseCommand databaseCommand, List<T> listOfObjects, string tableName = null)
+        {
+            databaseCommand.DbCommand.GenerateInsertsForPostgreSQL(listOfObjects, tableName);
 
             return databaseCommand;
         }
@@ -1138,6 +1222,107 @@ namespace SequelocityDotNet
         }
 
         /// <summary>
+        /// Executes a statement against the database and calls the <paramref name="selector" /> function for each record returned.
+        /// </summary>
+        /// <remarks>
+        /// For safety the DbDataReader is returned as an IDataRecord to the callback so that callers cannot modify the current row
+        /// being read.
+        /// </remarks>
+        /// <param name="databaseCommand"><see cref="DatabaseCommand" /> instance.</param>
+        /// <param name="selector">Function called for each record returned.</param>
+        /// <param name="keepConnectionOpen">Optional parameter indicating whether to keep the connection open. Default is false.</param>
+        public static IEnumerable<T> ExecuteReader<T>( this DatabaseCommand databaseCommand, Func<IDataRecord, T> selector, bool keepConnectionOpen = false )
+        {
+            DbDataReader dbDataReader = null;
+
+            try
+            {
+                try
+                {
+                    Sequelocity.ConfigurationSettings.EventHandlers.InvokeDatabaseCommandPreExecuteEventHandlers( databaseCommand );
+
+                    databaseCommand.DbCommand.OpenConnection();
+                    dbDataReader = databaseCommand.DbCommand.ExecuteReader();
+                }
+                catch ( Exception exception )
+                {
+                    Sequelocity.ConfigurationSettings.EventHandlers.InvokeDatabaseCommandUnhandledExceptionEventHandlers( exception, databaseCommand );
+                    throw;
+                }
+
+                var readerHasRows = false;
+                do
+                {
+                    try
+                    {
+                        readerHasRows = dbDataReader.HasRows;
+                        if ( !readerHasRows )
+                        {
+                            break;
+                        }
+                    }
+                    catch ( Exception exception )
+                    {
+                        Sequelocity.ConfigurationSettings.EventHandlers.InvokeDatabaseCommandUnhandledExceptionEventHandlers( exception, databaseCommand );
+                        throw;
+                    }
+
+                    var hasNextRow = false;
+                    do
+                    {
+                        T projection = default( T );
+                        try
+                        {
+                            hasNextRow = dbDataReader.Read();
+
+                            if (hasNextRow)
+                            {
+                                projection = selector.Invoke( dbDataReader );
+                            }
+                        }
+                        catch ( Exception exception )
+                        {
+                            Sequelocity.ConfigurationSettings.EventHandlers.InvokeDatabaseCommandUnhandledExceptionEventHandlers( exception, databaseCommand );
+                            throw;
+                        }
+
+                        if ( hasNextRow )
+                        {
+                            yield return projection;
+                        }
+                    }
+                    while ( hasNextRow );
+
+                    try
+                    {
+                        dbDataReader.NextResult();
+                    }
+                    catch ( Exception exception )
+                    {
+                        Sequelocity.ConfigurationSettings.EventHandlers.InvokeDatabaseCommandUnhandledExceptionEventHandlers( exception, databaseCommand );
+                        throw;
+                    }
+                }
+                while ( readerHasRows );
+
+                Sequelocity.ConfigurationSettings.EventHandlers.InvokeDatabaseCommandPostExecuteEventHandlers( databaseCommand );
+            }
+            finally
+            {
+                if ( dbDataReader != null )
+                {
+                    dbDataReader.Dispose();
+                }
+
+                if ( keepConnectionOpen == false )
+                {
+                    databaseCommand.DbCommand.CloseAndDispose();
+                    databaseCommand.DbCommand = null;
+                }
+            }
+        }
+
+        /// <summary>
         /// Executes a statement against a database and maps the results to a list of type <typeparamref name="T" /> using a given
         /// mapper function supplied to the <paramref name="mapper" /> parameter.
         /// </summary>
@@ -1223,7 +1408,7 @@ namespace SequelocityDotNet
 
 
                 DbProviderFactory dbProviderFactory = databaseCommand.DbCommand.Connection.GetDbProviderFactory();
-
+                
                 DbDataAdapter dataAdapter = dbProviderFactory.CreateDataAdapter();
 
                 if ( dataAdapter == null )
@@ -1265,7 +1450,7 @@ namespace SequelocityDotNet
         /// </returns>
         public static DataTable ExecuteToDataTable( this DatabaseCommand databaseCommand, bool keepConnectionOpen = false )
         {
-            return databaseCommand.ExecuteToDataSet( keepConnectionOpen ).Tables[0];
+            return databaseCommand.ExecuteToDataSet( keepConnectionOpen ).Tables[ 0 ];
         }
 
         #endregion Execute Functions
@@ -1286,23 +1471,23 @@ namespace SequelocityDotNet
         {
             if ( PropertiesAndFieldsCache.ContainsKey( type ) )
             {
-                return PropertiesAndFieldsCache[type];
+                return PropertiesAndFieldsCache[ type ];
             }
 
             var orderedDictionary = new OrderedDictionary( StringComparer.InvariantCultureIgnoreCase );
-
+            
             PropertyInfo[] properties = type.GetProperties();
 
             foreach ( PropertyInfo propertyInfo in properties )
             {
-                orderedDictionary[propertyInfo.Name] = propertyInfo;
+                orderedDictionary[ propertyInfo.Name ] = propertyInfo;
             }
 
             FieldInfo[] fields = type.GetFields();
 
             foreach ( FieldInfo fieldInfo in fields )
             {
-                orderedDictionary[fieldInfo.Name] = fieldInfo;
+                orderedDictionary[ fieldInfo.Name ] = fieldInfo;
             }
 
             PropertiesAndFieldsCache.Add( type, orderedDictionary );
@@ -1328,7 +1513,7 @@ namespace SequelocityDotNet
             // Note that in .NET v4.5 we could use this new method instead which would avoid the reflection:
             // DbProviderFactory dbProviderFactory = DbProviderFactories.GetFactory( databaseCommand.DbCommand.Connection );
 
-            return (DbProviderFactory)ProviderFactoryPropertyInfo.GetValue( dbConnection, null );
+            return ( DbProviderFactory ) ProviderFactoryPropertyInfo.GetValue( dbConnection, null );
         }
     }
 
@@ -1370,7 +1555,7 @@ namespace SequelocityDotNet
         /// </exception>
         public static T ConvertTo<T>( this object obj )
         {
-            return (T)TypeConverter.ConvertType( obj, typeof( T ) );
+            return ( T ) TypeConverter.ConvertType( obj, typeof ( T ) );
         }
 
         /// <summary>Converts the given object to an <see cref="int" />.</summary>
@@ -1519,7 +1704,7 @@ namespace SequelocityDotNet
             try
             {
                 // Handle Guids
-                if ( underlyingType == typeof( Guid ) )
+                if ( underlyingType == typeof ( Guid ) )
                 {
                     if ( value is string )
                     {
@@ -1573,16 +1758,16 @@ namespace SequelocityDotNet
         /// <exception cref="FieldSetValueException">Thrown when an error occurs when attempting to assign a value to a field.</exception>
         public static T Map<T>( this IDataRecord dataRecord )
         {
-            Type type = typeof( T );
+            Type type = typeof ( T );
 
             int fieldCount = dataRecord.FieldCount;
 
             // Handle mapping to primitives and strings when there is only a single field in the record
-            if ( fieldCount == 1 && ( type.IsPrimitive || type == typeof( string ) ) )
+            if ( fieldCount == 1 && ( type.IsPrimitive || type == typeof ( string ) ) )
             {
                 object convertedValue = TypeConverter.ConvertType( dataRecord.GetValue( 0 ), type );
 
-                return (T)convertedValue;
+                return ( T ) convertedValue;
             }
 
             object mappedObject = type.GetDefaultValue() ?? Activator.CreateInstance<T>();
@@ -1649,10 +1834,10 @@ namespace SequelocityDotNet
             {
                 object convertedValue = TypeConverter.ConvertType( dataRecord.GetValue( 0 ), type );
 
-                mappedObject = (T)convertedValue;
+                mappedObject = ( T ) convertedValue;
             }
 
-            return (T)mappedObject;
+            return ( T ) mappedObject;
         }
 
         /// <summary>Maps an <see cref="IDataRecord" /> to a type of dynamic object.</summary>
@@ -1671,7 +1856,7 @@ namespace SequelocityDotNet
                 if ( dataRecordFieldValue == DBNull.Value )
                     dataRecordFieldValue = null;
 
-                obj[dataRecordFieldName] = dataRecordFieldValue;
+                obj[ dataRecordFieldName ] = dataRecordFieldValue;
             }
 
             return obj;
@@ -1826,11 +2011,6 @@ namespace SequelocityDotNet
                 throw new ArgumentNullException( "parameterName" );
             }
 
-            if ( parameterValue == null )
-            {
-                parameterValue = DBNull.Value;
-            }
-
             DbParameter parameter = dbCommand.CreateParameter( parameterName, parameterValue );
 
             dbCommand.Parameters.Add( parameter );
@@ -1852,14 +2032,31 @@ namespace SequelocityDotNet
                 throw new ArgumentNullException( "parameterName" );
             }
 
-            if ( parameterValue == null ) 
-            {
-                parameterValue = DBNull.Value;
-            }
-
             DbParameter parameter = dbCommand.CreateParameter( parameterName, parameterValue, dbType );
 
             dbCommand.Parameters.Add( parameter );
+
+            return dbCommand;
+        }
+
+        /// <summary>Adds a parameter whose default value is <see cref="DBNull" /> when unassigned, to the <see cref="DbCommand" />.</summary>
+        /// <param name="dbCommand"><see cref="DbCommand" /> instance.</param>
+        /// <param name="parameterName">Parameter name.</param>
+        /// <param name="parameterValue">Parameter value.</param>
+        /// <param name="dbType">Parameter type.</param>
+        /// <returns>The given <see cref="DbCommand" /> instance.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when the <paramref name="parameterName" /> parameter is null.</exception>
+        public static DbCommand AddNullableParameter( this DbCommand dbCommand, string parameterName, object parameterValue, DbType dbType )
+        {
+            if ( parameterValue is string 
+                 && string.IsNullOrEmpty( parameterValue.ToString() ) )
+            {
+                parameterValue = null;
+            }
+
+            dbCommand = parameterValue == null
+                ? dbCommand.AddParameter( parameterName, DBNull.Value )
+                : dbCommand.AddParameter( parameterName, parameterValue, dbType );
 
             return dbCommand;
         }
@@ -2250,9 +2447,71 @@ SELECT LAST_INSERT_ID() AS LastInsertedId;
         /// </exception>
         public static DbCommand GenerateInsertsForMySql<T>( this DbCommand dbCommand, List<T> listOfObjects, string tableName = null )
         {
-            foreach ( T obj in listOfObjects )
+            foreach( T obj in listOfObjects )
             {
                 dbCommand.GenerateInsertForMySql( obj, tableName );
+            }
+
+            return dbCommand;
+        }
+
+        /// <summary>
+        /// Generates a parameterized PostgreSQL INSERT statement from the given object and adds it to the <see cref="DbCommand" />
+        /// .
+        /// <para>
+        /// Note that the generated query also selects the last inserted id using PostgreSQL's LastVal() function.
+        /// </para>
+        /// </summary>
+        /// <param name="dbCommand"><see cref="DbCommand" /> instance.</param>
+        /// <param name="obj">Object to generate the SQL INSERT statement from.</param>
+        /// <param name="tableName">
+        /// Optional table name to insert into. If none is supplied, it will use the type name. Note that this parameter is
+        /// required when passing in an anonymous object or an <see cref="ArgumentNullException" /> will be thrown.
+        /// </param>
+        /// <returns>The given <see cref="DbCommand" /> instance.</returns>
+        /// <exception cref="ArgumentNullException">
+        /// The value of 'tableName' cannot be null when the object passed is an anonymous
+        /// type.
+        /// </exception>
+        public static DbCommand GenerateInsertForPostgreSQL(this DbCommand dbCommand, object obj, string tableName = null)
+        {
+            const string postgreSQLInsertStatementTemplate = @"
+INSERT INTO {0}
+({1}
+)
+VALUES
+({2}
+);
+select LastVal();
+";
+
+            return dbCommand.GenerateInsertCommand(obj, postgreSQLInsertStatementTemplate, tableName, KeywordEscapeMethod.None);
+        }
+
+        /// <summary>
+        /// Generates a list of concatenated parameterized PostgreSQL INSERT statements from the given list of objects and adds it to
+        /// the <see cref="DbCommand" />.
+        /// <para>
+        /// Note that the generated query also selects the last inserted id using PostgreSQL's LastVal() function.
+        /// </para>
+        /// </summary>
+        /// <typeparam name="T">Type of the objects in the list.</typeparam>
+        /// <param name="dbCommand"><see cref="DbCommand" /> instance.</param>
+        /// <param name="listOfObjects">List of objects to generate the SQL INSERT statements from.</param>
+        /// <param name="tableName">
+        /// Optional table name to insert into. If none is supplied, it will use the type name. Note that this parameter is
+        /// required when passing in an anonymous object or an <see cref="ArgumentNullException" /> will be thrown.
+        /// </param>
+        /// <returns>The given <see cref="DbCommand" /> instance.</returns>
+        /// <exception cref="ArgumentNullException">
+        /// The value of 'tableName' cannot be null when the object passed is an anonymous
+        /// type.
+        /// </exception>
+        public static DbCommand GenerateInsertsForPostgreSQL<T>(this DbCommand dbCommand, List<T> listOfObjects, string tableName = null)
+        {
+            foreach(T obj in listOfObjects)
+            {
+                dbCommand.GenerateInsertForPostgreSQL(obj, tableName);
             }
 
             return dbCommand;
@@ -2477,10 +2736,10 @@ SELECT SCOPE_IDENTITY() AS [LastInsertedId];
             string columns = string.Empty;
 
             string values = string.Empty;
-
+            
             IDictionary<string, object> namesAndValues = GetPropertyAndFieldNamesAndValues( obj );
-
-            foreach ( var nameAndValue in namesAndValues )
+            
+            foreach( var nameAndValue in namesAndValues )
             {
                 if ( nameAndValue.Value == null )
                     continue;
@@ -2587,7 +2846,7 @@ SELECT SCOPE_IDENTITY() AS [LastInsertedId];
 
         public override bool TryGetMember( GetMemberBinder binder, out object result )
         {
-            result = _dictionary[binder.Name];
+            result = _dictionary[ binder.Name ];
 
             return true;
         }
@@ -2596,7 +2855,7 @@ SELECT SCOPE_IDENTITY() AS [LastInsertedId];
         {
             if ( _dictionary.ContainsKey( binder.Name ) )
             {
-                _dictionary[binder.Name] = value;
+                _dictionary[ binder.Name ] = value;
             }
             else
             {
@@ -2608,9 +2867,9 @@ SELECT SCOPE_IDENTITY() AS [LastInsertedId];
 
         public override bool TryInvokeMember( InvokeMemberBinder binder, object[] args, out object result )
         {
-            if ( _dictionary.ContainsKey( binder.Name ) && _dictionary[binder.Name] is Delegate )
+            if ( _dictionary.ContainsKey( binder.Name ) && _dictionary[ binder.Name ] is Delegate )
             {
-                var delegateValue = _dictionary[binder.Name] as Delegate;
+                var delegateValue = _dictionary[ binder.Name ] as Delegate;
 
                 result = delegateValue.DynamicInvoke( args );
 
@@ -2654,7 +2913,7 @@ SELECT SCOPE_IDENTITY() AS [LastInsertedId];
             get { return _dictionary.Values; }
         }
 
-        public object this[string key]
+        public object this[ string key ]
         {
             get
             {
@@ -2664,7 +2923,7 @@ SELECT SCOPE_IDENTITY() AS [LastInsertedId];
 
                 return value;
             }
-            set { _dictionary[key] = value; }
+            set { _dictionary[ key ] = value; }
         }
 
         #endregion IDictionary<string,object> Members
@@ -2793,7 +3052,7 @@ SELECT SCOPE_IDENTITY() AS [LastInsertedId];
                 get { return _dictionary.Values; }
             }
 
-            public TValue this[TKey key]
+            public TValue this[ TKey key ]
             {
                 get
                 {
@@ -2803,7 +3062,7 @@ SELECT SCOPE_IDENTITY() AS [LastInsertedId];
 
                     return value;
                 }
-                set { _dictionary[key] = value; }
+                set { _dictionary[ key ] = value; }
             }
 
             #endregion IDictionary<string,TValue> Members
